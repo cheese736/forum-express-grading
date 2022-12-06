@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs') // 載入 bcrypt
-const db = require('../models')
-const { User } = db
+const { User, Comment, Restaurant } = require('../models')
 const { imgurFileHandler } = require('../helpers/file-helpers')
+const { getUser } = require('../helpers/auth-helpers')
 const userController = {
   signUpPage: (req, res) => {
     res.render('signup')
@@ -9,7 +9,7 @@ const userController = {
   signUp: (req, res, next) => { // 修改這裡
     if (req.body.password !== req.body.passwordCheck) throw new Error('Passwords do not match!')
 
-    User.findOne({ where: { email: req.body.email } })
+    return User.findOne({ where: { email: req.body.email } })
       .then(user => {
         if (user) throw new Error('Email already exists!')
         return bcrypt.hash(req.body.password, 10) // 前面加 return
@@ -38,33 +38,26 @@ const userController = {
     res.redirect('/signin')
   },
   getUser: (req, res, next) => {
-    /* this block features user-confirming logic but cannot pass local test */
-    // const userId = req.user.id
-    // if (userId !== +req.params.id) throw new Error('Permission denied!')
-    // return User.findByPk(userId, { raw: true })
-    //   .then(user => {
-    //     res.render('users/profile', { user })
-    //   })
-    //   .catch(err => next(err))
-
-    return User.findByPk(req.params.id, { raw: true })
-      .then(user => {
-        res.render('users/profile', { user })
+    const userId = getUser(req).id
+    if (userId !== Number(req.params.id)) throw new Error('Permission denied!')
+    return Promise.all([
+      User.findByPk(userId, { raw: true }),
+      Comment.findAndCountAll({
+        include: [Restaurant],
+        nest: true,
+        where: { userId: req.params.id }
+      })
+    ])
+      .then(([user, comments]) => {
+        res.render('users/profile', { user, comments })
       })
       .catch(err => next(err))
   },
 
   editUser: (req, res, next) => {
-    /* this block features user-confirming logic but cannot pass local test */
-    // const userId = req.user.id
-    // if (userId !== Number(req.params.id)) throw new Error('Permission denied!')
-    // return User.findByPk(userId, { raw: true })
-    //   .then(user => {
-    //     res.render('users/edit', { user })
-    //   })
-    //   .catch(err => next(err))
-
-    return User.findByPk(req.params.id, { raw: true })
+    const userId = getUser(req).id
+    if (userId !== Number(req.params.id)) throw new Error('Permission denied!')
+    return User.findByPk(userId, { raw: true })
       .then(user => {
         res.render('users/edit', { user })
       })
